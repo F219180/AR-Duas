@@ -2,542 +2,1063 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>AR Dua Learning - Object Recognition</title>
-    <meta name="description" content="Learn Islamic duas by pointing at everyday objects">
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+    <title>Islamic AR Duas - Professional 3D Experience</title>
+    <meta name="description" content="Professional Islamic duas in augmented reality with spiritual benefits">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap');
+        
         body {
             margin: 0;
-            font-family: 'Arial', sans-serif;
-            background: #1a1a2e;
-            color: white;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background: #000;
             overflow: hidden;
         }
         
-        .loading-screen {
-            position: fixed;
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #video {
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            object-fit: cover;
+            z-index: 1;
+        }
+        
+        #threeCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .ar-ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            pointer-events: none;
+        }
+        
+        .status-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, rgba(0, 20, 40, 0.95), rgba(20, 40, 60, 0.95));
+            color: white;
+            padding: 20px;
+            border-radius: 16px;
+            font-size: 14px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            pointer-events: auto;
+            font-weight: 400;
+        }
+        
+        .status-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #4CAF50;
+        }
+        
+        .detection-status {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.9), rgba(20, 20, 20, 0.9));
+            color: white;
+            padding: 16px 28px;
+            border-radius: 30px;
+            font-weight: 500;
+            backdrop-filter: blur(20px);
+            border: 2px solid #4CAF50;
+            text-align: center;
+            min-width: 280px;
+            font-size: 14px;
+            box-shadow: 0 8px 32px rgba(76, 175, 80, 0.3);
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(0, 20, 40, 0.95), rgba(20, 40, 60, 0.95));
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            color: white;
             z-index: 1000;
-            transition: opacity 0.5s ease;
         }
         
-        .loading-screen h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            text-align: center;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            border-top: 4px solid #4CAF50;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 24px;
         }
         
-        .loading-screen p {
-            font-size: 1.2em;
-            text-align: center;
-            margin: 10px 20px;
-            line-height: 1.5;
+        .loading-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #4CAF50;
         }
         
-        .start-button {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.3em;
-            color: white;
-            border-radius: 50px;
-            cursor: pointer;
-            margin-top: 30px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-            transition: transform 0.3s ease;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
-        .start-button:hover {
-            transform: translateY(-3px);
-        }
-        
-        .instructions {
+        .object-highlight {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.9);
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 14px;
-            z-index: 100;
-            backdrop-filter: blur(10px);
             border: 2px solid #4CAF50;
-        }
-        
-        .object-detector {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 200px;
-            height: 200px;
-            border: 3px solid #4CAF50;
-            border-radius: 20px;
-            z-index: 50;
-            animation: pulse 2s infinite;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+            pointer-events: none;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 30px rgba(76, 175, 80, 0.4);
+            backdrop-filter: blur(5px);
         }
         
         @keyframes pulse {
-            0% { border-color: #4CAF50; transform: translate(-50%, -50%) scale(1); }
-            50% { border-color: #FF6B6B; transform: translate(-50%, -50%) scale(1.1); }
-            100% { border-color: #4CAF50; transform: translate(-50%, -50%) scale(1); }
-        }
-        
-        .dua-overlay {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.95);
-            padding: 30px;
-            border-radius: 20px;
-            text-align: center;
-            display: none;
-            z-index: 200;
-            backdrop-filter: blur(15px);
-            border: 3px solid #FFD700;
-            max-width: 90%;
-            animation: slideIn 0.5s ease-out;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translate(-50%, -60%);
+            0% { 
+                transform: scale(1);
+                box-shadow: 0 0 30px rgba(76, 175, 80, 0.4);
             }
-            to {
-                opacity: 1;
-                transform: translate(-50%, -50%);
+            50% { 
+                transform: scale(1.02);
+                box-shadow: 0 0 40px rgba(76, 175, 80, 0.6);
+            }
+            100% { 
+                transform: scale(1);
+                box-shadow: 0 0 30px rgba(76, 175, 80, 0.4);
             }
         }
         
-        .arabic-text {
-            font-size: 2.5em;
-            color: #2E8B57;
-            margin: 15px 0;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         
-        .english-text {
-            font-size: 1.3em;
-            color: #4682B4;
-            margin: 10px 0;
-        }
-        
-        .pronunciation-text {
-            font-size: 1.1em;
-            color: #8A2BE2;
-            margin: 10px 0;
-            font-style: italic;
-        }
-        
-        .context-text {
-            font-size: 1em;
-            color: #FFD700;
-            margin: 15px 0;
-            font-weight: bold;
-        }
-        
-        .object-detected {
-            font-size: 1.2em;
-            color: #4CAF50;
-            margin-bottom: 15px;
-            font-weight: bold;
-        }
-        
-        .play-button {
-            background: linear-gradient(45deg, #FF6B6B, #ee5a24);
+        .control-btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
             border: none;
             color: white;
-            padding: 15px 30px;
-            margin: 15px 10px;
-            border-radius: 50px;
+            padding: 14px;
+            border-radius: 50%;
             cursor: pointer;
-            font-size: 1.1em;
+            font-size: 12px;
+            width: 56px;
+            height: 56px;
+            box-shadow: 0 4px 20px rgba(76, 175, 80, 0.4);
+            pointer-events: auto;
             transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
         }
         
-        .play-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
-        }
-        
-        .close-button {
-            background: linear-gradient(45deg, #666, #444);
-            border: none;
-            color: white;
-            padding: 10px 20px;
-            margin: 10px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 1em;
-        }
-        
-        .detected-objects {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 14px;
-            z-index: 150;
+        .control-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(76, 175, 80, 0.6);
         }
         
         .hidden { display: none !important; }
-        
-        .camera-view {
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-        }
-        
-        /* Responsive design */
-        @media (max-width: 600px) {
-            .loading-screen h1 { font-size: 2em; }
-            .loading-screen p { font-size: 1em; }
-            .instructions { font-size: 12px; }
-            .arabic-text { font-size: 2em; }
-            .dua-overlay { padding: 20px; }
-        }
     </style>
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen">
-        <h1>🕌 AR Dua Learning</h1>
-        <p>📱 Point your camera at everyday objects to learn Islamic duas</p>
-        <p>🚪 Door → Leaving home dua</p>
-        <p>🥤 Cup/Glass → Drinking dua</p>
-        <p>🍽️ Food → Eating dua</p>
-        <button class="start-button" onclick="startAR()">Start Object Recognition</button>
-    </div>
-    
-    <!-- Instructions -->
-    <div class="instructions hidden" id="instructions">
-        <strong>📋 How to use:</strong><br>
-        • Point camera at: Door 🚪, Cup 🥤, or Food 🍽️<br>
-        • Keep object in the green frame for 2 seconds<br>
-        • Islamic dua will appear automatically<br>
-        • Tap 🔊 PLAY to hear pronunciation<br>
-        • Try different objects for different duas!
-    </div>
-    
-    <!-- Object Detection Frame -->
-    <div class="object-detector hidden" id="objectDetector"></div>
-    
-    <!-- Dua Display Overlay -->
-    <div class="dua-overlay" id="duaOverlay">
-        <div class="object-detected" id="objectDetected">🚪 Door Detected</div>
-        <div class="arabic-text" id="arabicText">بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ</div>
-        <div class="english-text" id="englishText">In the name of Allah, I trust in Allah</div>
-        <div class="pronunciation-text" id="pronunciationText">(Bismillahi tawakkaltu 'alallah)</div>
-        <div class="context-text" id="contextText">📍 When leaving home</div>
+    <div id="container">
+        <!-- Camera Feed -->
+        <video id="video" autoplay muted playsinline></video>
         
-        <button class="play-button" onclick="playDua()">🔊 PLAY DUA</button>
-        <button class="close-button" onclick="closeDua()">✖ CLOSE</button>
+        <!-- 3D AR Canvas -->
+        <canvas id="threeCanvas"></canvas>
+        
+        <!-- Loading Screen -->
+        <div class="loading-overlay" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-title">Islamic AR Experience</div>
+            <p>Initializing AI-powered Dua recognition system</p>
+            <div id="loadingProgress">Starting neural networks...</div>
+        </div>
+        
+        <!-- AR UI -->
+        <div class="ar-ui">
+            <div class="status-panel" id="statusPanel" class="hidden">
+                <div class="status-title">Islamic AR Duas</div>
+                <div>Point your camera at an object, and instantly receive the specific Dua connected to it — bringing knowledge to life through Augmented Reality.</div>
+            </div>
+            
+            <div class="detection-status" id="detectionStatus">
+                Scanning environment for blessed objects...
+            </div>
+            
+            <div class="controls">
+                <button class="control-btn hidden" id="audioBtn" onclick="toggleAudio()" title="Toggle Audio">
+                    Audio
+                </button>
+                <button class="control-btn hidden" id="settingsBtn" onclick="toggleSettings()" title="Settings">
+                    Set
+                </button>
+            </div>
+        </div>
     </div>
-    
-    <!-- Detection Status -->
-    <div class="detected-objects hidden" id="detectionStatus">
-        <strong>Objects Found:</strong><br>
-        <span id="objectsList">Scanning...</span>
-    </div>
-
-    <!-- Camera Video -->
-    <video class="camera-view hidden" id="cameraVideo" autoplay muted playsinline></video>
 
     <script>
-        let currentDua = null;
-        let detectionTimer = null;
-        let isScanning = true;
-        
-        // Comprehensive Dua Database
-        const duaDatabase = {
-            // Door/Exit related duas
+        let video, scene, camera, renderer, model;
+        let isModelLoaded = false;
+        let currentDetections = [];
+        let activeDua3D = null;
+        let duaMeshes = [];
+        let audioEnabled = true;
+        let lastPlayedDua = null;
+        let loadedFont = null;
+        let confidenceThreshold = 0.65;
+        let detectionStabilizer = {};
+        let stableDetectionTime = 0;
+
+        // Authentic Islamic Duas for specific objects with Arabic transliterations
+        const objectDuas = {
+            person: { // Face detection
+                english: "O Allah, make me beautiful inwardly as You have made me beautiful outwardly",
+                arabic: "Allahumma hassin khuluqi kama hassanta khalqi",
+                context: "When Looking in Mirror",
+                benefits: [
+                    "Increases inner beauty and good character",
+                    "Protection from vanity and arrogance"
+                ],
+                color: 0x9932CC,
+                accentColor: 0xDDA0DD
+            },
             door: {
-                arabic: "بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ",
-                english: "In the name of Allah, I trust in Allah",
-                pronunciation: "Bismillahi tawakkaltu 'alallah",
-                context: "When leaving home",
-                icon: "🚪",
-                objectName: "Door"
+                english: "In the name of Allah, I trust in Allah, there is no power except with Allah",
+                arabic: "Bismillahi tawakkaltu alallahi wa la hawla wa la quwwata illa billah",
+                context: "Upon Leaving Home",
+                benefits: [
+                    "Complete protection throughout the journey",
+                    "Divine guidance and safety from all harm"
+                ],
+                color: 0x2E8B57,
+                accentColor: 0x90EE90
             },
-            
-            // Drinking related duas  
             cup: {
-                arabic: "بِسْمِ اللَّهِ",
-                english: "In the name of Allah",
-                pronunciation: "Bismillah",
-                context: "Before drinking water",
-                icon: "🥤",
-                objectName: "Cup/Glass"
+                english: "In the name of Allah and with Allah's blessing",
+                arabic: "Bismillahi wa ala barakatillah",
+                context: "Before Drinking",
+                benefits: [
+                    "Increases blessing in sustenance",
+                    "Protection from harmful effects in drink"
+                ],
+                color: 0x4682B4,
+                accentColor: 0x87CEEB
             },
-            
-            glass: {
-                arabic: "الْحَمْدُ لِلَّهِ الَّذِي سَقَانَا",
-                english: "Praise be to Allah who gave us drink",
-                pronunciation: "Alhamdulillahi-lladhi saqana",
-                context: "After drinking",
-                icon: "🥛",
-                objectName: "Glass"
+            bottle: {
+                english: "Praise to Allah who gave us sweet pure water by His mercy",
+                arabic: "Alhamdulillahi-lladhi saqana adhban furatan bi-rahmatihi",
+                context: "After Drinking Water",
+                benefits: [
+                    "Recognition of Allah's countless blessings",
+                    "Spiritual purification along with physical cleansing"
+                ],
+                color: 0x1E90FF,
+                accentColor: 0x00BFFF
             },
-            
-            // Food related duas
             food: {
-                arabic: "اللَّهُمَّ بَارِكْ لَنَا فِيمَا رَزَقْتَنَا",
-                english: "O Allah, bless us in what You have provided",
-                pronunciation: "Allahumma barik lana feema razaqtana",
-                context: "Before eating",
-                icon: "🍽️",
-                objectName: "Food/Plate"
+                english: "O Allah, bless us in what You have provided and protect us from the punishment of Fire",
+                arabic: "Allahumma barik lana feema razaqtana wa qina adhab an-nar",
+                context: "Before Eating",
+                benefits: [
+                    "Increases blessing and nutrition in food",
+                    "Protection from Hell-fire through gratitude"
+                ],
+                color: 0xFF6347,
+                accentColor: 0xFFA07A
             },
-            
-            bread: {
-                arabic: "اللَّهُمَّ بَارِكْ لَنَا فِيهِ وَزِدْنَا مِنْهُ",
-                english: "O Allah, bless it for us and give us more",
-                pronunciation: "Allahumma barik lana feehi wa zidna minhu",
-                context: "When eating bread/staple food",
-                icon: "🍞",
-                objectName: "Bread"
+            pizza: { // Common food item
+                english: "O Allah, bless us in what You have provided and protect us from the punishment of Fire",
+                arabic: "Allahumma barik lana feema razaqtana wa qina adhab an-nar",
+                context: "Before Eating",
+                benefits: [
+                    "Increases blessing and nutrition in food",
+                    "Protection from Hell-fire through gratitude"
+                ],
+                color: 0xFF6347,
+                accentColor: 0xFFA07A
             },
-            
-            // Additional objects
-            book: {
-                arabic: "رَبِّ اشْرَحْ لِي صَدْرِي",
-                english: "My Lord, expand my chest (with knowledge)",
-                pronunciation: "Rabbi-shrah lee sadri",
-                context: "Before studying/reading",
-                icon: "📖",
-                objectName: "Book"
+            apple: { // Common food item
+                english: "O Allah, bless us in what You have provided and protect us from the punishment of Fire",
+                arabic: "Allahumma barik lana feema razaqtana wa qina adhab an-nar",
+                context: "Before Eating",
+                benefits: [
+                    "Increases blessing and nutrition in food",
+                    "Protection from Hell-fire through gratitude"
+                ],
+                color: 0xFF6347,
+                accentColor: 0xFFA07A
             },
-            
-            phone: {
-                arabic: "اللَّهُمَّ اهْدِنِي فِيمَنْ هَدَيْتَ",
-                english: "O Allah, guide me among those You have guided",
-                pronunciation: "Allahumma-hdini feeman hadayt",
-                context: "For guidance in communication",
-                icon: "📱",
-                objectName: "Phone"
+            banana: { // Common food item
+                english: "O Allah, bless us in what You have provided and protect us from the punishment of Fire",
+                arabic: "Allahumma barik lana feema razaqtana wa qina adhab an-nar",
+                context: "Before Eating",
+                benefits: [
+                    "Increases blessing and nutrition in food",
+                    "Protection from Hell-fire through gratitude"
+                ],
+                color: 0xFF6347,
+                accentColor: 0xFFA07A
+            },
+            sandwich: { // Common food item
+                english: "O Allah, bless us in what You have provided and protect us from the punishment of Fire",
+                arabic: "Allahumma barik lana feema razaqtana wa qina adhab an-nar",
+                context: "Before Eating",
+                benefits: [
+                    "Increases blessing and nutrition in food",
+                    "Protection from Hell-fire through gratitude"
+                ],
+                color: 0xFF6347,
+                accentColor: 0xFFA07A
             }
         };
-        
-        // Simple object detection keywords
-        const objectKeywords = {
-            door: ['door', 'exit', 'entrance', 'gate'],
-            cup: ['cup', 'mug', 'tumbler', 'beverage'],
-            glass: ['glass', 'water', 'drink', 'liquid'],
-            food: ['food', 'plate', 'meal', 'dish', 'bowl'],
-            bread: ['bread', 'loaf', 'bun', 'toast'],
-            book: ['book', 'notebook', 'text', 'reading'],
-            phone: ['phone', 'mobile', 'smartphone', 'device']
-        };
 
-        async function startAR() {
-            const loadingScreen = document.getElementById('loadingScreen');
-            const instructions = document.getElementById('instructions');
-            const objectDetector = document.getElementById('objectDetector');
-            const detectionStatus = document.getElementById('detectionStatus');
-            const cameraVideo = document.getElementById('cameraVideo');
-            
-            loadingScreen.style.opacity = '0';
-            setTimeout(() => {
-                loadingScreen.classList.add('hidden');
-                instructions.classList.remove('hidden');
-                objectDetector.classList.remove('hidden');
-                detectionStatus.classList.remove('hidden');
-                cameraVideo.classList.remove('hidden');
-            }, 500);
-            
-            // Start camera
+        // Updated valid objects - only face, bottle, cup, door, food items
+        const validObjects = ['person', 'door', 'cup', 'bottle', 'food', 'pizza', 'apple', 'banana', 'sandwich', 'cake', 'donut', 'hot dog', 'hamburger', 'orange'];
+
+        async function initializeAR() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    } 
-                });
-                cameraVideo.srcObject = stream;
+                updateLoadingProgress('Establishing camera connection...');
+                await setupCamera();
                 
-                // Start object detection simulation
-                startObjectDetection();
+                updateLoadingProgress('Initializing 3D rendering engine...');
+                await setup3DScene();
+                
+                updateLoadingProgress('Loading typography system...');
+                await loadFont();
+                
+                updateLoadingProgress('Loading AI recognition model...');
+                await loadAIModel();
+                
+                updateLoadingProgress('Calibrating AR experience...');
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                startARLoop();
+                
+                // Hide loading, show AR
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('statusPanel').classList.remove('hidden');
+                document.getElementById('audioBtn').classList.remove('hidden');
+                document.getElementById('settingsBtn').classList.remove('hidden');
             } catch (error) {
-                alert('Camera access denied. Please allow camera permissions and refresh.');
-                console.error('Camera error:', error);
+                console.error('AR initialization failed:', error);
+                updateLoadingProgress('Failed to initialize. Please refresh and try again.');
             }
         }
 
-        function startObjectDetection() {
-            // Simulate object detection with timed reveals
-            const detectionSequence = [
-                { object: 'door', delay: 3000 },
-                { object: 'cup', delay: 8000 },
-                { object: 'food', delay: 13000 },
-                { object: 'glass', delay: 18000 },
-                { object: 'book', delay: 23000 }
-            ];
+        async function setupCamera() {
+            video = document.getElementById('video');
             
-            let currentDetection = 0;
-            updateDetectionStatus('Scanning for objects...');
+            const constraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1920, min: 1280 },
+                    height: { ideal: 1080, min: 720 },
+                    frameRate: { ideal: 30, min: 24 }
+                }
+            };
             
-            // Cycle through detections for demo purposes
-            detectionSequence.forEach((detection, index) => {
-                setTimeout(() => {
-                    if (isScanning) {
-                        detectObject(detection.object);
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            
+            return new Promise((resolve) => {
+                video.onloadedmetadata = resolve;
+            });
+        }
+
+        async function setup3DScene() {
+            scene = new THREE.Scene();
+            
+            camera = new THREE.PerspectiveCamera(
+                60, 
+                window.innerWidth / window.innerHeight, 
+                0.1, 
+                2000
+            );
+            camera.position.set(0, 0, 0);
+            
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('threeCanvas'),
+                alpha: true,
+                antialias: true,
+                powerPreference: "high-performance"
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Enhanced lighting setup with white backlighting for text clarity
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // White backlight for text clarity
+            const backLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            backLight.position.set(0, 0, -10);
+            scene.add(backLight);
+            
+            // Fill lights for even illumination
+            const fillLight1 = new THREE.PointLight(0xffffff, 0.8, 50);
+            fillLight1.position.set(-15, 15, 10);
+            scene.add(fillLight1);
+            
+            const fillLight2 = new THREE.PointLight(0xffffff, 0.6, 40);
+            fillLight2.position.set(15, -10, 8);
+            scene.add(fillLight2);
+            
+            // Rim light for text definition
+            const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            rimLight.position.set(0, 10, -5);
+            scene.add(rimLight);
+        }
+
+        async function loadFont() {
+            return new Promise((resolve) => {
+                const loader = new THREE.FontLoader();
+                
+                loader.load(
+                    'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
+                    function (font) {
+                        loadedFont = font;
+                        resolve();
+                    },
+                    function (progress) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        updateLoadingProgress(`Loading typography... ${percent}%`);
+                    },
+                    function (error) {
+                        console.warn('Font loading failed, using fallback');
+                        resolve();
                     }
-                }, detection.delay);
+                );
+            });
+        }
+
+        async function loadAIModel() {
+            model = await cocoSsd.load({
+                base: 'mobilenet_v2'
+            });
+            isModelLoaded = true;
+        }
+
+        function startARLoop() {
+            detectObjectsAndRender();
+        }
+
+        async function detectObjectsAndRender() {
+            if (!isModelLoaded) {
+                requestAnimationFrame(detectObjectsAndRender);
+                return;
+            }
+            
+            try {
+                const predictions = await model.detect(video);
+                currentDetections = predictions;
+                
+                clearObjectHighlights();
+                
+                // Filter for valid objects with stabilization
+                const validDetections = predictions.filter(p => 
+                    p.score > confidenceThreshold && 
+                    validObjects.includes(p.class.toLowerCase())
+                );
+                
+                if (validDetections.length > 0) {
+                    // Stabilize detection - only change if confident for multiple frames
+                    const bestDetection = validDetections.sort((a, b) => b.score - a.score)[0];
+                    const objectType = bestDetection.class.toLowerCase();
+                    
+                    if (detectionStabilizer.type === objectType) {
+                        detectionStabilizer.count++;
+                    } else {
+                        detectionStabilizer = { type: objectType, count: 1, detection: bestDetection };
+                    }
+                    
+                    // Only process if stable for multiple frames OR if it's the same object already showing
+                    if (detectionStabilizer.count >= 3 || activeDua3D === objectType) {
+                        processDetections([bestDetection]);
+                        stableDetectionTime = Date.now();
+                    }
+                } else {
+                    // Only clear if no detection for 2 seconds
+                    if (Date.now() - stableDetectionTime > 2000) {
+                        clear3DDuas();
+                        updateDetectionStatus('Scanning for blessed objects...');
+                        detectionStabilizer = {};
+                    }
+                }
+            } catch (error) {
+                console.error('Detection error:', error);
+            }
+            
+            renderer.render(scene, camera);
+            requestAnimationFrame(detectObjectsAndRender);
+        }
+
+        function processDetections(validDetections) {
+            const bestDetection = validDetections[0];
+            const objectType = bestDetection.class.toLowerCase();
+            const confidence = Math.round(bestDetection.score * 100);
+            
+            highlightObject(bestDetection);
+            show3DDua(objectType, bestDetection);
+            
+            updateDetectionStatus(`${objectType.charAt(0).toUpperCase() + objectType.slice(1)} detected (${confidence}%)`);
+        }
+
+        function highlightObject(detection) {
+            const highlight = document.createElement('div');
+            highlight.className = 'object-highlight';
+            
+            const rect = video.getBoundingClientRect();
+            const x = (detection.bbox[0] / video.videoWidth) * rect.width;
+            const y = (detection.bbox[1] / video.videoHeight) * rect.height;
+            const width = (detection.bbox[2] / video.videoWidth) * rect.width;
+            const height = (detection.bbox[3] / video.videoHeight) * rect.height;
+            
+            highlight.style.left = `${x}px`;
+            highlight.style.top = `${y}px`;
+            highlight.style.width = `${width}px`;
+            highlight.style.height = `${height}px`;
+            
+            document.body.appendChild(highlight);
+            
+            setTimeout(() => {
+                if (highlight.parentNode) {
+                    highlight.parentNode.removeChild(highlight);
+                }
+            }, 4000);
+        }
+
+        function show3DDua(objectType, detection) {
+            const dua = objectDuas[objectType];
+            if (!dua) return;
+            
+            // Only recreate if it's a different object type
+            if (activeDua3D !== objectType) {
+                clear3DDuas();
+                activeDua3D = objectType;
+                createProfessional3DDisplay(dua, detection);
+                
+                if (audioEnabled && lastPlayedDua !== objectType) {
+                    setTimeout(() => playDuaAudio(dua), 1500);
+                    lastPlayedDua = objectType;
+                }
+            } else {
+                // Update position if same object but moved
+                updateDuaPosition(detection);
+            }
+        }
+
+        function updateDuaPosition(detection) {
+            if (duaMeshes.length === 0) return;
+            
+            const group = duaMeshes[0];
+            
+            const screenX = (detection.bbox[0] + detection.bbox[2] / 2) / video.videoWidth;
+            const screenY = (detection.bbox[1] + detection.bbox[3] / 2) / video.videoHeight;
+            
+            const worldX = (screenX - 0.5) * 10;
+            const worldY = -(screenY - 0.5) * 6;
+            const worldZ = -6;
+            
+            // Smooth position interpolation
+            group.userData.targetX = worldX;
+            group.userData.targetY = worldY + 1.5;
+            group.userData.targetZ = worldZ;
+        }
+
+        function createProfessional3DDisplay(dua, detection) {
+            const group = new THREE.Group();
+            
+            const screenX = (detection.bbox[0] + detection.bbox[2] / 2) / video.videoWidth;
+            const screenY = (detection.bbox[1] + detection.bbox[3] / 2) / video.videoHeight;
+            
+            const worldX = (screenX - 0.5) * 10;
+            const worldY = -(screenY - 0.5) * 6;
+            const worldZ = -6;
+            
+            group.position.set(worldX, worldY + 1.5, worldZ);
+            
+            if (loadedFont) {
+                // Arabic transliteration (main focus - larger and clearer)
+                create3DText(dua.arabic, {
+                    x: 0, y: 1.4, z: 0.1
+                }, {
+                    size: 0.22,
+                    height: 0.04,
+                    color: dua.color,
+                    font: loadedFont,
+                    glow: true
+                }, group);
+                
+                // English translation (secondary - clear but smaller)
+                create3DText(dua.english, {
+                    x: 0, y: 0.9, z: 0.1
+                }, {
+                    size: 0.14,
+                    height: 0.025,
+                    color: 0xFFFFFF,
+                    font: loadedFont,
+                    glow: false
+                }, group);
+                
+                // Context
+                create3DText(dua.context, {
+                    x: 0, y: 0.5, z: 0.1
+                }, {
+                    size: 0.12,
+                    height: 0.015,
+                    color: 0xCCCCCC,
+                    font: loadedFont
+                }, group);
+                
+                // First benefit
+                create3DText(dua.benefits[0], {
+                    x: 0, y: 0.1, z: 0.1
+                }, {
+                    size: 0.09,
+                    height: 0.01,
+                    color: 0x90EE90,
+                    font: loadedFont
+                }, group);
+                
+                // Second benefit
+                create3DText(dua.benefits[1], {
+                    x: 0, y: -0.3, z: 0.1
+                }, {
+                    size: 0.09,
+                    height: 0.01,
+                    color: 0x87CEEB,
+                    font: loadedFont
+                }, group);
+            } else {
+                // Fallback planes with improved clarity
+                createTextPlane(dua.arabic, { x: 0, y: 1.2, z: 0.1 }, dua.color, 0.28, group, true);
+                createTextPlane(dua.english, { x: 0, y: 0.7, z: 0.1 }, 0xFFFFFF, 0.20, group);
+                createTextPlane(dua.context, { x: 0, y: 0.3, z: 0.1 }, 0xCCCCCC, 0.18, group);
+                createTextPlane(dua.benefits[0], { x: 0, y: -0.1, z: 0.1 }, 0x90EE90, 0.15, group);
+                createTextPlane(dua.benefits[1], { x: 0, y: -0.5, z: 0.1 }, 0x87CEEB, 0.15, group);
+            }
+            
+            addIslamicDecorations(group, dua);
+            
+            group.userData.originalY = group.position.y;
+            group.userData.originalX = group.position.x;
+            group.userData.originalZ = group.position.z;
+            group.userData.time = 0;
+            group.userData.rotationSpeed = 0.001;
+            
+            scene.add(group);
+            duaMeshes.push(group);
+        }
+
+        function create3DText(text, position, options, parent) {
+            if (!loadedFont || !text) return;
+            
+            const textGeometry = new THREE.TextGeometry(text, {
+                font: options.font,
+                size: options.size,
+                height: options.height,
+                curveSegments: 12,
+                bevelEnabled: true,
+                bevelThickness: 0.003,
+                bevelSize: 0.002,
+                bevelOffset: 0,
+                bevelSegments: 3
             });
             
-            // Random detection simulation
-            setInterval(() => {
-                if (isScanning && !document.getElementById('duaOverlay').style.display !== 'none') {
-                    const randomObjects = ['door', 'cup', 'food', 'glass', 'bread', 'book'];
-                    const randomObject = randomObjects[Math.floor(Math.random() * randomObjects.length)];
-                    simulateDetection(randomObject);
+            textGeometry.computeBoundingBox();
+            const centerOffsetX = -0.5 * (textGeometry.boundingBox.max.x - textGeometry.boundingBox.min.x);
+            
+            // Enhanced material for better clarity with proper lighting response
+            const textMaterial = new THREE.MeshPhysicalMaterial({
+                color: options.color,
+                emissive: new THREE.Color(options.color).multiplyScalar(options.glow ? 0.15 : 0.05),
+                metalness: 0.05,
+                roughness: 0.2,
+                clearcoat: 0.8,
+                clearcoatRoughness: 0.1,
+                transparent: true,
+                opacity: 0.98,
+                reflectivity: 0.3
+            });
+            
+            const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+            textMesh.position.set(
+                position.x + centerOffsetX,
+                position.y,
+                position.z
+            );
+            
+            textMesh.userData.floatSpeed = 0.003 + Math.random() * 0.003;
+            textMesh.userData.floatAmplitude = 0.03;
+            
+            parent.add(textMesh);
+        }
+
+        function createTextPlane(text, position, color, scale, parent, isArabic = false) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 1536;
+            canvas.height = 384;
+            
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Enhanced text rendering with better visibility
+            const fontSize = isArabic ? 56 : 48;
+            context.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            
+            // Text with enhanced visibility
+            context.fillStyle = `#${color.toString(16).padStart(6, '0')}`;
+            
+            // Add subtle text shadow for depth without white backing
+            context.shadowColor = 'rgba(0, 0, 0, 0.7)';
+            context.shadowBlur = 4;
+            context.shadowOffsetX = 2;
+            context.shadowOffsetY = 2;
+            
+            // For Arabic text, add special highlighting
+            if (isArabic) {
+                // Add a subtle glow effect
+                const glowColor = `#${color.toString(16).padStart(6, '0')}`;
+                context.shadowColor = glowColor;
+                context.shadowBlur = 12;
+                context.shadowOffsetX = 0;
+                context.shadowOffsetY = 0;
+                context.fillText(text, canvas.width / 2, canvas.height / 2);
+                
+                // Reset shadow for main text
+                context.shadowColor = 'rgba(0, 0, 0, 0.7)';
+                context.shadowBlur = 4;
+                context.shadowOffsetX = 2;
+                context.shadowOffsetY = 2;
+            }
+            
+            // Main text
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.generateMipmaps = false;
+            texture.minFilter = THREE.LinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                alphaTest: 0.1,
+                opacity: 0.95
+            });
+            
+            const geometry = new THREE.PlaneGeometry(6 * scale, 1.5 * scale);
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            mesh.position.set(position.x, position.y, position.z);
+            mesh.userData.floatSpeed = 0.003;
+            mesh.userData.floatAmplitude = 0.03;
+            
+            parent.add(mesh);
+        }
+
+        function addIslamicDecorations(group, dua) {
+            // Crescent moon
+            const crescentGeometry = new THREE.TorusGeometry(0.1, 0.02, 6, 12, Math.PI * 1.6);
+            const crescentMaterial = new THREE.MeshPhysicalMaterial({ 
+                color: 0x4CAF50,
+                emissive: 0x002200,
+                metalness: 0.3,
+                roughness: 0.2
+            });
+            const crescent = new THREE.Mesh(crescentGeometry, crescentMaterial);
+            crescent.position.set(2.5, 1.4, 0.2);
+            crescent.rotation.z = Math.PI / 8;
+            group.add(crescent);
+            
+            // Star
+            const starGeometry = new THREE.ConeGeometry(0.025, 0.06, 5);
+            const starMaterial = new THREE.MeshPhysicalMaterial({ 
+                color: 0xFFD700,
+                emissive: 0x221100
+            });
+            const star = new THREE.Mesh(starGeometry, starMaterial);
+            star.position.set(2.65, 1.55, 0.2);
+            group.add(star);
+            
+            // Floating particles
+            for (let i = 0; i < 6; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.015);
+                const particleMaterial = new THREE.MeshPhysicalMaterial({
+                    color: dua.accentColor,
+                    emissive: new THREE.Color(dua.accentColor).multiplyScalar(0.2),
+                    transparent: true,
+                    opacity: 0.7
+                });
+                
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                const angle = (i / 6) * Math.PI * 2;
+                const radius = 0.8 + Math.random() * 0.4;
+                particle.position.set(
+                    Math.cos(angle) * radius,
+                    Math.sin(angle) * 0.2,
+                    (Math.random() - 0.5) * 0.3
+                );
+                
+                particle.userData.orbitSpeed = 0.005 + Math.random() * 0.005;
+                particle.userData.orbitRadius = radius;
+                particle.userData.orbitAngle = angle;
+                
+                group.add(particle);
+            }
+        }
+
+        function clear3DDuas() {
+            duaMeshes.forEach(mesh => {
+                scene.remove(mesh);
+                mesh.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(material => {
+                                if (material.map) material.map.dispose();
+                                material.dispose();
+                            });
+                        } else {
+                            if (child.material.map) child.material.map.dispose();
+                            child.material.dispose();
+                        }
+                    }
+                });
+            });
+            duaMeshes = [];
+            activeDua3D = null;
+        }
+
+        function clearObjectHighlights() {
+            document.querySelectorAll('.object-highlight').forEach(highlight => {
+                if (highlight.parentNode) {
+                    highlight.parentNode.removeChild(highlight);
                 }
-            }, 10000);
+            });
         }
 
-        function simulateDetection(objectType) {
-            updateDetectionStatus(`Detected: ${duaDatabase[objectType].objectName} ${duaDatabase[objectType].icon}`);
+        function playDuaAudio(dua) {
+            // Speak both Arabic transliteration and English translation
+            const arabicSpeech = new SpeechSynthesisUtterance(dua.arabic);
+            arabicSpeech.rate = 0.6;
+            arabicSpeech.pitch = 1.1;
+            arabicSpeech.volume = 0.8;
+            arabicSpeech.lang = 'en-US';
             
-            // Show detection for 2 seconds then trigger dua
-            setTimeout(() => {
-                detectObject(objectType);
-            }, 2000);
-        }
-
-        function detectObject(objectType) {
-            if (duaDatabase[objectType]) {
-                currentDua = duaDatabase[objectType];
-                showDua(objectType);
-                updateDetectionStatus(`✅ ${currentDua.objectName} - Dua displayed!`);
-            }
-        }
-
-        function showDua(objectType) {
-            const overlay = document.getElementById('duaOverlay');
-            const dua = duaDatabase[objectType];
+            const englishSpeech = new SpeechSynthesisUtterance(dua.english);
+            englishSpeech.rate = 0.7;
+            englishSpeech.pitch = 1.0;
+            englishSpeech.volume = 0.8;
+            englishSpeech.lang = 'en-US';
             
-            // Update dua content
-            document.getElementById('objectDetected').textContent = `${dua.icon} ${dua.objectName} Detected`;
-            document.getElementById('arabicText').textContent = dua.arabic;
-            document.getElementById('englishText').textContent = dua.english;
-            document.getElementById('pronunciationText').textContent = `(${dua.pronunciation})`;
-            document.getElementById('contextText').textContent = `📍 ${dua.context}`;
-            
-            // Show overlay
-            overlay.style.display = 'block';
-            isScanning = false;
-        }
-
-        function playDua() {
-            if (!currentDua) return;
-            
-            // Use Web Speech API
-            const utterance = new SpeechSynthesisUtterance(currentDua.pronunciation);
-            
-            // Try to use Arabic voice if available
             const voices = speechSynthesis.getVoices();
-            const arabicVoice = voices.find(voice => voice.lang.includes('ar')) || 
-                              voices.find(voice => voice.lang.includes('en'));
+            const preferredVoice = voices.find(voice => 
+                voice.lang.includes('en') && 
+                (voice.name.includes('Google') || voice.name.includes('Microsoft'))
+            );
             
-            if (arabicVoice) {
-                utterance.voice = arabicVoice;
+            if (preferredVoice) {
+                arabicSpeech.voice = preferredVoice;
+                englishSpeech.voice = preferredVoice;
             }
             
-            utterance.rate = 0.6; // Slower for learning
-            utterance.pitch = 1;
-            utterance.volume = 1;
+            // Speak Arabic first, then English after a pause
+            speechSynthesis.speak(arabicSpeech);
             
-            speechSynthesis.speak(utterance);
-            
-            // Visual feedback
-            const playButton = document.querySelector('.play-button');
-            const originalText = playButton.textContent;
-            playButton.textContent = '🔊 PLAYING...';
-            playButton.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
-            
-            utterance.onend = () => {
-                playButton.textContent = originalText;
-                playButton.style.background = 'linear-gradient(45deg, #FF6B6B, #ee5a24)';
+            arabicSpeech.onend = () => {
+                setTimeout(() => {
+                    speechSynthesis.speak(englishSpeech);
+                }, 800);
             };
         }
 
-        function closeDua() {
-            document.getElementById('duaOverlay').style.display = 'none';
-            isScanning = true;
-            currentDua = null;
-            updateDetectionStatus('Scanning for objects...');
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audioBtn');
+            btn.textContent = audioEnabled ? 'Audio' : 'Mute';
+            btn.style.opacity = audioEnabled ? '1' : '0.7';
+            
+            btn.style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                btn.style.transform = 'scale(1)';
+            }, 150);
+        }
+
+        function toggleSettings() {
+            confidenceThreshold = confidenceThreshold === 0.65 ? 0.55 : 0.65;
+            
+            const btn = document.getElementById('settingsBtn');
+            btn.style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                btn.style.transform = 'scale(1)';
+            }, 150);
+            
+            updateDetectionStatus(`Sensitivity: ${confidenceThreshold === 0.65 ? 'Normal' : 'High'}`);
+            
+            setTimeout(() => {
+                updateDetectionStatus('Scanning for blessed objects...');
+            }, 2000);
+        }
+
+        function updateLoadingProgress(message) {
+            document.getElementById('loadingProgress').textContent = message;
         }
 
         function updateDetectionStatus(message) {
-            document.getElementById('objectsList').textContent = message;
+            document.getElementById('detectionStatus').innerHTML = message;
         }
 
-        // Initialize speech synthesis
-        window.addEventListener('load', function() {
-            if (speechSynthesis.onvoiceschanged !== undefined) {
-                speechSynthesis.onvoiceschanged = () => {
-                    console.log('Voices loaded:', speechSynthesis.getVoices().length);
-                };
-            }
+        // Enhanced animation system with smooth position tracking
+        function animateFloatingElements() {
+            duaMeshes.forEach(group => {
+                group.userData.time += 0.008;
+                
+                // Smooth position interpolation for object tracking
+                if (group.userData.targetX !== undefined) {
+                    const lerpFactor = 0.08;
+                    group.position.x = THREE.MathUtils.lerp(group.position.x, group.userData.targetX, lerpFactor);
+                    group.position.y = THREE.MathUtils.lerp(group.position.y, group.userData.targetY, lerpFactor);
+                    group.position.z = THREE.MathUtils.lerp(group.position.z, group.userData.targetZ, lerpFactor);
+                } else {
+                    // Gentle floating when no tracking
+                    group.position.y = group.userData.originalY + Math.sin(group.userData.time) * 0.08;
+                }
+                
+                // Subtle rotation
+                if (group.userData.rotationSpeed) {
+                    group.rotation.y += group.userData.rotationSpeed;
+                }
+                
+                // Animate individual elements
+                group.children.forEach(child => {
+                    // Text floating animation
+                    if (child.userData.floatSpeed) {
+                        const time = Date.now() * child.userData.floatSpeed;
+                        const originalY = child.position.y;
+                        child.position.y = originalY + Math.sin(time) * child.userData.floatAmplitude * 0.5;
+                        child.rotation.z = Math.sin(time * 0.5) * 0.01;
+                    }
+                    
+                    // Pattern orbiting animation
+                    if (child.userData.orbitSpeed) {
+                        child.userData.orbitAngle += child.userData.orbitSpeed;
+                        const newX = Math.cos(child.userData.orbitAngle) * child.userData.orbitRadius;
+                        const newZ = Math.sin(child.userData.orbitAngle) * 0.08;
+                        child.position.x = newX;
+                        child.position.z = 0.15 + newZ;
+                    }
+                });
+            });
             
-            // Trigger voice loading
-            speechSynthesis.getVoices();
+            requestAnimationFrame(animateFloatingElements);
+        }
+
+        // Window resize handling
+        function handleResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }
+
+        // Event listeners
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(handleResize, 100);
         });
 
-        // Simulate realistic object detection for demo
-        function createDemoSequence() {
-            const demoSteps = [
-                { 
-                    message: "Point camera at a door or doorway 🚪", 
-                    object: 'door', 
-                    delay: 5000 
-                },
-                { 
-                    message: "Now try pointing at a cup or glass 🥤", 
-                    object: 'cup', 
-                    delay: 10000 
-                },
-                { 
-                    message: "Point at food or a plate 🍽️", 
-                    object: 'food', 
-                    delay: 15000 
-                }
-            ];
-            
-            demoSteps.forEach((step, index) => {
-                setTimeout(() => {
-                    updateDetectionStatus(step.message);
-                    setTimeout(() => {
-                        detectObject(step.object);
-                    }, 3000);
-                }, step.delay);
-            });
-        }
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        // Auto-start demo sequence after 2 seconds
-        setTimeout(() => {
-            if (document.getElementById('cameraVideo').srcObject) {
-                createDemoSequence();
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                speechSynthesis.cancel();
+            } else {
+                lastPlayedDua = null;
             }
-        }, 2000);
+        });
+
+        // Global functions
+        window.toggleAudio = toggleAudio;
+        window.toggleSettings = toggleSettings;
+
+        // Initialize the AR experience
+        window.addEventListener('load', () => {
+            // Check for required features
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('Camera access is required for AR functionality');
+                return;
+            }
+            
+            if (!window.THREE) {
+                alert('3D rendering library failed to load');
+                return;
+            }
+            
+            // Start initialization
+            initializeAR().catch(error => {
+                console.error('AR initialization failed:', error);
+                document.getElementById('loadingProgress').textContent = 'Failed to initialize AR. Please refresh.';
+            });
+            
+            // Start animation loop
+            animateFloatingElements();
+            
+            // Load speech voices
+            if ('speechSynthesis' in window) {
+                speechSynthesis.onvoiceschanged = () => {
+                    speechSynthesis.getVoices();
+                };
+            }
+        });
     </script>
 </body>
 </html>
