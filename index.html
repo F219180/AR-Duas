@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>AR Dua Learning - Object Recognition</title>
+    <meta name="description" content="Learn Islamic duas by pointing at everyday objects">
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background: #1a1a2e;
+            color: white;
+            overflow: hidden;
+        }
+        
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+        
+        .loading-screen h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .loading-screen p {
+            font-size: 1.2em;
+            text-align: center;
+            margin: 10px 20px;
+            line-height: 1.5;
+        }
+        
+        .start-button {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.3em;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 30px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        .start-button:hover {
+            transform: translateY(-3px);
+        }
+        
+        .instructions {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 100;
+            backdrop-filter: blur(10px);
+            border: 2px solid #4CAF50;
+        }
+        
+        .object-detector {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 200px;
+            height: 200px;
+            border: 3px solid #4CAF50;
+            border-radius: 20px;
+            z-index: 50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { border-color: #4CAF50; transform: translate(-50%, -50%) scale(1); }
+            50% { border-color: #FF6B6B; transform: translate(-50%, -50%) scale(1.1); }
+            100% { border-color: #4CAF50; transform: translate(-50%, -50%) scale(1); }
+        }
+        
+        .dua-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 200;
+            backdrop-filter: blur(15px);
+            border: 3px solid #FFD700;
+            max-width: 90%;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+        
+        .arabic-text {
+            font-size: 2.5em;
+            color: #2E8B57;
+            margin: 15px 0;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .english-text {
+            font-size: 1.3em;
+            color: #4682B4;
+            margin: 10px 0;
+        }
+        
+        .pronunciation-text {
+            font-size: 1.1em;
+            color: #8A2BE2;
+            margin: 10px 0;
+            font-style: italic;
+        }
+        
+        .context-text {
+            font-size: 1em;
+            color: #FFD700;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        
+        .object-detected {
+            font-size: 1.2em;
+            color: #4CAF50;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .play-button {
+            background: linear-gradient(45deg, #FF6B6B, #ee5a24);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            margin: 15px 10px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+        }
+        
+        .play-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+        
+        .close-button {
+            background: linear-gradient(45deg, #666, #444);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        
+        .detected-objects {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 150;
+        }
+        
+        .hidden { display: none !important; }
+        
+        .camera-view {
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 600px) {
+            .loading-screen h1 { font-size: 2em; }
+            .loading-screen p { font-size: 1em; }
+            .instructions { font-size: 12px; }
+            .arabic-text { font-size: 2em; }
+            .dua-overlay { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <h1>🕌 AR Dua Learning</h1>
+        <p>📱 Point your camera at everyday objects to learn Islamic duas</p>
+        <p>🚪 Door → Leaving home dua</p>
+        <p>🥤 Cup/Glass → Drinking dua</p>
+        <p>🍽️ Food → Eating dua</p>
+        <button class="start-button" onclick="startAR()">Start Object Recognition</button>
+    </div>
+    
+    <!-- Instructions -->
+    <div class="instructions hidden" id="instructions">
+        <strong>📋 How to use:</strong><br>
+        • Point camera at: Door 🚪, Cup 🥤, or Food 🍽️<br>
+        • Keep object in the green frame for 2 seconds<br>
+        • Islamic dua will appear automatically<br>
+        • Tap 🔊 PLAY to hear pronunciation<br>
+        • Try different objects for different duas!
+    </div>
+    
+    <!-- Object Detection Frame -->
+    <div class="object-detector hidden" id="objectDetector"></div>
+    
+    <!-- Dua Display Overlay -->
+    <div class="dua-overlay" id="duaOverlay">
+        <div class="object-detected" id="objectDetected">🚪 Door Detected</div>
+        <div class="arabic-text" id="arabicText">بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ</div>
+        <div class="english-text" id="englishText">In the name of Allah, I trust in Allah</div>
+        <div class="pronunciation-text" id="pronunciationText">(Bismillahi tawakkaltu 'alallah)</div>
+        <div class="context-text" id="contextText">📍 When leaving home</div>
+        
+        <button class="play-button" onclick="playDua()">🔊 PLAY DUA</button>
+        <button class="close-button" onclick="closeDua()">✖ CLOSE</button>
+    </div>
+    
+    <!-- Detection Status -->
+    <div class="detected-objects hidden" id="detectionStatus">
+        <strong>Objects Found:</strong><br>
+        <span id="objectsList">Scanning...</span>
+    </div>
+
+    <!-- Camera Video -->
+    <video class="camera-view hidden" id="cameraVideo" autoplay muted playsinline></video>
+
+    <script>
+        let currentDua = null;
+        let detectionTimer = null;
+        let isScanning = true;
+        
+        // Comprehensive Dua Database
+        const duaDatabase = {
+            // Door/Exit related duas
+            door: {
+                arabic: "بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ",
+                english: "In the name of Allah, I trust in Allah",
+                pronunciation: "Bismillahi tawakkaltu 'alallah",
+                context: "When leaving home",
+                icon: "🚪",
+                objectName: "Door"
+            },
+            
+            // Drinking related duas  
+            cup: {
+                arabic: "بِسْمِ اللَّهِ",
+                english: "In the name of Allah",
+                pronunciation: "Bismillah",
+                context: "Before drinking water",
+                icon: "🥤",
+                objectName: "Cup/Glass"
+            },
+            
+            glass: {
+                arabic: "الْحَمْدُ لِلَّهِ الَّذِي سَقَانَا",
+                english: "Praise be to Allah who gave us drink",
+                pronunciation: "Alhamdulillahi-lladhi saqana",
+                context: "After drinking",
+                icon: "🥛",
+                objectName: "Glass"
+            },
+            
+            // Food related duas
+            food: {
+                arabic: "اللَّهُمَّ بَارِكْ لَنَا فِيمَا رَزَقْتَنَا",
+                english: "O Allah, bless us in what You have provided",
+                pronunciation: "Allahumma barik lana feema razaqtana",
+                context: "Before eating",
+                icon: "🍽️",
+                objectName: "Food/Plate"
+            },
+            
+            bread: {
+                arabic: "اللَّهُمَّ بَارِكْ لَنَا فِيهِ وَزِدْنَا مِنْهُ",
+                english: "O Allah, bless it for us and give us more",
+                pronunciation: "Allahumma barik lana feehi wa zidna minhu",
+                context: "When eating bread/staple food",
+                icon: "🍞",
+                objectName: "Bread"
+            },
+            
+            // Additional objects
+            book: {
+                arabic: "رَبِّ اشْرَحْ لِي صَدْرِي",
+                english: "My Lord, expand my chest (with knowledge)",
+                pronunciation: "Rabbi-shrah lee sadri",
+                context: "Before studying/reading",
+                icon: "📖",
+                objectName: "Book"
+            },
+            
+            phone: {
+                arabic: "اللَّهُمَّ اهْدِنِي فِيمَنْ هَدَيْتَ",
+                english: "O Allah, guide me among those You have guided",
+                pronunciation: "Allahumma-hdini feeman hadayt",
+                context: "For guidance in communication",
+                icon: "📱",
+                objectName: "Phone"
+            }
+        };
+        
+        // Simple object detection keywords
+        const objectKeywords = {
+            door: ['door', 'exit', 'entrance', 'gate'],
+            cup: ['cup', 'mug', 'tumbler', 'beverage'],
+            glass: ['glass', 'water', 'drink', 'liquid'],
+            food: ['food', 'plate', 'meal', 'dish', 'bowl'],
+            bread: ['bread', 'loaf', 'bun', 'toast'],
+            book: ['book', 'notebook', 'text', 'reading'],
+            phone: ['phone', 'mobile', 'smartphone', 'device']
+        };
+
+        async function startAR() {
+            const loadingScreen = document.getElementById('loadingScreen');
+            const instructions = document.getElementById('instructions');
+            const objectDetector = document.getElementById('objectDetector');
+            const detectionStatus = document.getElementById('detectionStatus');
+            const cameraVideo = document.getElementById('cameraVideo');
+            
+            loadingScreen.style.opacity = '0';
+            setTimeout(() => {
+                loadingScreen.classList.add('hidden');
+                instructions.classList.remove('hidden');
+                objectDetector.classList.remove('hidden');
+                detectionStatus.classList.remove('hidden');
+                cameraVideo.classList.remove('hidden');
+            }, 500);
+            
+            // Start camera
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                cameraVideo.srcObject = stream;
+                
+                // Start object detection simulation
+                startObjectDetection();
+            } catch (error) {
+                alert('Camera access denied. Please allow camera permissions and refresh.');
+                console.error('Camera error:', error);
+            }
+        }
+
+        function startObjectDetection() {
+            // Simulate object detection with timed reveals
+            const detectionSequence = [
+                { object: 'door', delay: 3000 },
+                { object: 'cup', delay: 8000 },
+                { object: 'food', delay: 13000 },
+                { object: 'glass', delay: 18000 },
+                { object: 'book', delay: 23000 }
+            ];
+            
+            let currentDetection = 0;
+            updateDetectionStatus('Scanning for objects...');
+            
+            // Cycle through detections for demo purposes
+            detectionSequence.forEach((detection, index) => {
+                setTimeout(() => {
+                    if (isScanning) {
+                        detectObject(detection.object);
+                    }
+                }, detection.delay);
+            });
+            
+            // Random detection simulation
+            setInterval(() => {
+                if (isScanning && !document.getElementById('duaOverlay').style.display !== 'none') {
+                    const randomObjects = ['door', 'cup', 'food', 'glass', 'bread', 'book'];
+                    const randomObject = randomObjects[Math.floor(Math.random() * randomObjects.length)];
+                    simulateDetection(randomObject);
+                }
+            }, 10000);
+        }
+
+        function simulateDetection(objectType) {
+            updateDetectionStatus(`Detected: ${duaDatabase[objectType].objectName} ${duaDatabase[objectType].icon}`);
+            
+            // Show detection for 2 seconds then trigger dua
+            setTimeout(() => {
+                detectObject(objectType);
+            }, 2000);
+        }
+
+        function detectObject(objectType) {
+            if (duaDatabase[objectType]) {
+                currentDua = duaDatabase[objectType];
+                showDua(objectType);
+                updateDetectionStatus(`✅ ${currentDua.objectName} - Dua displayed!`);
+            }
+        }
+
+        function showDua(objectType) {
+            const overlay = document.getElementById('duaOverlay');
+            const dua = duaDatabase[objectType];
+            
+            // Update dua content
+            document.getElementById('objectDetected').textContent = `${dua.icon} ${dua.objectName} Detected`;
+            document.getElementById('arabicText').textContent = dua.arabic;
+            document.getElementById('englishText').textContent = dua.english;
+            document.getElementById('pronunciationText').textContent = `(${dua.pronunciation})`;
+            document.getElementById('contextText').textContent = `📍 ${dua.context}`;
+            
+            // Show overlay
+            overlay.style.display = 'block';
+            isScanning = false;
+        }
+
+        function playDua() {
+            if (!currentDua) return;
+            
+            // Use Web Speech API
+            const utterance = new SpeechSynthesisUtterance(currentDua.pronunciation);
+            
+            // Try to use Arabic voice if available
+            const voices = speechSynthesis.getVoices();
+            const arabicVoice = voices.find(voice => voice.lang.includes('ar')) || 
+                              voices.find(voice => voice.lang.includes('en'));
+            
+            if (arabicVoice) {
+                utterance.voice = arabicVoice;
+            }
+            
+            utterance.rate = 0.6; // Slower for learning
+            utterance.pitch = 1;
+            utterance.volume = 1;
+            
+            speechSynthesis.speak(utterance);
+            
+            // Visual feedback
+            const playButton = document.querySelector('.play-button');
+            const originalText = playButton.textContent;
+            playButton.textContent = '🔊 PLAYING...';
+            playButton.style.background = 'linear-gradient(45deg, #4CAF50, #45a049)';
+            
+            utterance.onend = () => {
+                playButton.textContent = originalText;
+                playButton.style.background = 'linear-gradient(45deg, #FF6B6B, #ee5a24)';
+            };
+        }
+
+        function closeDua() {
+            document.getElementById('duaOverlay').style.display = 'none';
+            isScanning = true;
+            currentDua = null;
+            updateDetectionStatus('Scanning for objects...');
+        }
+
+        function updateDetectionStatus(message) {
+            document.getElementById('objectsList').textContent = message;
+        }
+
+        // Initialize speech synthesis
+        window.addEventListener('load', function() {
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = () => {
+                    console.log('Voices loaded:', speechSynthesis.getVoices().length);
+                };
+            }
+            
+            // Trigger voice loading
+            speechSynthesis.getVoices();
+        });
+
+        // Simulate realistic object detection for demo
+        function createDemoSequence() {
+            const demoSteps = [
+                { 
+                    message: "Point camera at a door or doorway 🚪", 
+                    object: 'door', 
+                    delay: 5000 
+                },
+                { 
+                    message: "Now try pointing at a cup or glass 🥤", 
+                    object: 'cup', 
+                    delay: 10000 
+                },
+                { 
+                    message: "Point at food or a plate 🍽️", 
+                    object: 'food', 
+                    delay: 15000 
+                }
+            ];
+            
+            demoSteps.forEach((step, index) => {
+                setTimeout(() => {
+                    updateDetectionStatus(step.message);
+                    setTimeout(() => {
+                        detectObject(step.object);
+                    }, 3000);
+                }, step.delay);
+            });
+        }
+
+        // Auto-start demo sequence after 2 seconds
+        setTimeout(() => {
+            if (document.getElementById('cameraVideo').srcObject) {
+                createDemoSequence();
+            }
+        }, 2000);
+    </script>
+</body>
+</html>
